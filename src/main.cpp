@@ -13,6 +13,9 @@
 #define LDR_PIN PA3
 #define RAIN_PIN PA4
 
+#define LED1_PIN PB12
+#define LED2_PIN PB13
+
 FilterOnePole Lowpass(LOWPASS, 0.6);
 float motor_rpm = 0.0f;
 float motor_rpm_no_filter = 0.0f;
@@ -38,6 +41,13 @@ void setup()
   pinMode(INA_PIN, OUTPUT);
   pinMode(INB_PIN, OUTPUT);
   pinMode(PWM_PIN, OUTPUT);
+
+  pinMode(LIM_B_PIN, INPUT);
+  pinMode(LIM_F_PIN, INPUT);
+  pinMode(SW1_PIN, INPUT);
+
+  pinMode(LED1_PIN, OUTPUT);
+  pinMode(LED2_PIN, OUTPUT);
 
   Serial.begin(9600);
   // analogWriteFrequency(1000);
@@ -113,6 +123,12 @@ void task1()
 {
 
   // 1 2 OUTSIDE TO_INSIDE
+  enum mode
+  {
+    AUTO,
+    MANUAL
+  };
+
   enum status
   {
     INSIDE,
@@ -128,9 +144,14 @@ void task1()
 
   static status clothes_rack = INSIDE;
   static direction rail_direction = DO_NOTHING;
+  static mode system_mode = AUTO;
   // so dark so high resistance ////ldr
-  const uint16_t ldr_high = 700, ldr_low = 300;  //dim avg480 light 
-  const uint16_t rain_high = 800;
+  const uint16_t ldr_high = 700, ldr_low = 300; //dim avg480 light
+  const uint16_t rain_high = 700;
+  static bool led1_val = 1, led2_val = 1;
+
+  digitalWrite(LED1_PIN, led1_val);
+  digitalWrite(LED2_PIN, led2_val);
 
   if (digitalRead(LIM_F_PIN))
   {
@@ -146,24 +167,55 @@ void task1()
     delay(50);
     if (!digitalRead(SW1_PIN))
     {
-      clothes_rack == INSIDE ? rail_direction = TO_OUTSIDE : rail_direction = TO_INSIDE;
+      if (system_mode == MANUAL)
+      {
+        clothes_rack == INSIDE ? rail_direction = TO_OUTSIDE : rail_direction = TO_INSIDE;
+      }
     }
+    uint32_t last_time = millis();
     while (!digitalRead(SW1_PIN))
-      ;
+    {
+      if (millis() - last_time >= 3000)
+      {
+        if (system_mode == AUTO)
+        {
+          system_mode = MANUAL;
+          rail_direction = DO_NOTHING;
+          led1_val = 1;
+          led2_val = 0;
+        }
+        else if (system_mode == MANUAL)
+        {
+          system_mode = AUTO;
+          rail_direction = DO_NOTHING;
+          led1_val = 1;
+          led2_val = 1;
+        }
+        digitalWrite(LED1_PIN, led1_val);
+        digitalWrite(LED2_PIN, led2_val);
+        while (!digitalRead(SW1_PIN))
+          ;
+        break;
+      }
+    }
   }
 
-  if (analogRead(LDR_PIN) <= ldr_low)
+  if (system_mode == AUTO)
   {
-    rail_direction = TO_OUTSIDE;
-  }
-  else if (analogRead(LDR_PIN) >= ldr_high)
-  {
-    rail_direction = TO_INSIDE;
-  }
 
-  if (analogRead(RAIN_PIN) <= rain_high)
-  {
-    rail_direction = TO_INSIDE;
+    if (analogRead(LDR_PIN) <= ldr_low)
+    {
+      rail_direction = TO_OUTSIDE;
+    }
+    else if (analogRead(LDR_PIN) >= ldr_high)
+    {
+      rail_direction = TO_INSIDE;
+    }
+
+    if (analogRead(RAIN_PIN) <= rain_high)
+    {
+      rail_direction = TO_INSIDE;
+    }
   }
 
   if (rail_direction == TO_OUTSIDE && clothes_rack == OUTSIDE)
@@ -175,14 +227,13 @@ void task1()
     rail_direction = DO_NOTHING;
   }
 
-Serial.print(analogRead(LDR_PIN));
+  Serial.print(analogRead(LDR_PIN));
   Serial.print(" ");
   Serial.print(analogRead(RAIN_PIN));
   Serial.print(" ");
   Serial.print(clothes_rack);
   Serial.print(" ");
   Serial.println(rail_direction);
-
 
   if (rail_direction == TO_OUTSIDE)
   {
