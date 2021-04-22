@@ -1,9 +1,17 @@
 #include <Arduino.h>
 #include "Filters.h"
+
 #define ENC_PIN PB6
+
 #define INA_PIN PB7
 #define INB_PIN PB8
 #define PWM_PIN PB9
+
+#define LIM_B_PIN PA0
+#define LIM_F_PIN PA1
+#define SW1_PIN PA2
+#define LDR_PIN PA3
+#define RAIN_PIN PA4
 
 FilterOnePole Lowpass(LOWPASS, 0.6);
 float motor_rpm = 0.0f;
@@ -17,33 +25,42 @@ void motorDrive(bool ina_val, bool inb_val, uint8_t pwm_val);
 void speedControl(uint16_t target_speed, String direction);
 void zeroRPMCheck();
 int smooth(int data, float filterVal, float smoothedVal);
+void debugLoop();
+void task1();
 
 void setup()
 {
-  pinMode(ENC_PIN, INPUT);
-
   pinMode(PC13, OUTPUT);
   digitalWrite(PC13, 1);
-  pinMode(PB7, OUTPUT);
-  pinMode(PB8, OUTPUT);
-  pinMode(PB9, OUTPUT);
-  pinMode(PA3, OUTPUT);
-  // pinMode(PB9,PWM);
-  // digitalWrite(PB7,0);
-  // digitalWrite(PB8,1);
-  // analogWrite(PB9,255);/
+
+  pinMode(ENC_PIN, INPUT);
+
+  pinMode(INA_PIN, OUTPUT);
+  pinMode(INB_PIN, OUTPUT);
+  pinMode(PWM_PIN, OUTPUT);
+
   Serial.begin(9600);
   // analogWriteFrequency(1000);
 
-  // motorDrive(0, 1, 200);
-
   attachInterrupt(digitalPinToInterrupt(ENC_PIN), readRPM, RISING);
-
-  // analogWrite(PB9,100);
-  // pwmWrite();
 }
 uint32_t x;
 void loop()
+{
+
+  ///////////////////////// main code ///////////////////
+  static uint32_t last_time_interval = 0;
+
+  if (millis() - last_time_interval >= 10)
+  {
+    task1();
+  }
+
+  ///////////////////////// See a value ///////////////////
+  //debugLoop();
+}
+
+void debugLoop()
 {
 
   static uint32_t last_time_interval = 0;
@@ -92,6 +109,94 @@ void loop()
   }
 }
 
+void task1()
+{
+
+  // 1 2 OUTSIDE TO_INSIDE
+  enum status
+  {
+    INSIDE,
+    OUTSIDE
+  };
+  enum direction
+  {
+    DO_NOTHING,
+    TO_OUTSIDE,
+    TO_INSIDE
+
+  };
+
+  static status clothes_rack = INSIDE;
+  static direction rail_direction = DO_NOTHING;
+  // so dark so high resistance ////ldr
+  const uint16_t ldr_high = 700, ldr_low = 300;  //dim avg480 light 
+  const uint16_t rain_high = 800;
+
+  if (digitalRead(LIM_F_PIN))
+  {
+    clothes_rack = INSIDE;
+  }
+  else if (digitalRead(LIM_B_PIN))
+  {
+    clothes_rack = OUTSIDE;
+  }
+
+  if (!digitalRead(SW1_PIN))
+  {
+    delay(50);
+    if (!digitalRead(SW1_PIN))
+    {
+      clothes_rack == INSIDE ? rail_direction = TO_OUTSIDE : rail_direction = TO_INSIDE;
+    }
+    while (!digitalRead(SW1_PIN))
+      ;
+  }
+
+  if (analogRead(LDR_PIN) <= ldr_low)
+  {
+    rail_direction = TO_OUTSIDE;
+  }
+  else if (analogRead(LDR_PIN) >= ldr_high)
+  {
+    rail_direction = TO_INSIDE;
+  }
+
+  if (analogRead(RAIN_PIN) <= rain_high)
+  {
+    rail_direction = TO_INSIDE;
+  }
+
+  if (rail_direction == TO_OUTSIDE && clothes_rack == OUTSIDE)
+  {
+    rail_direction = DO_NOTHING;
+  }
+  else if (rail_direction == TO_INSIDE && clothes_rack == INSIDE)
+  {
+    rail_direction = DO_NOTHING;
+  }
+
+Serial.print(analogRead(LDR_PIN));
+  Serial.print(" ");
+  Serial.print(analogRead(RAIN_PIN));
+  Serial.print(" ");
+  Serial.print(clothes_rack);
+  Serial.print(" ");
+  Serial.println(rail_direction);
+
+
+  if (rail_direction == TO_OUTSIDE)
+  {
+    speedControl(150, "CCW");
+  }
+  else if (rail_direction == TO_INSIDE)
+  {
+    speedControl(150, "CW");
+  }
+  else if (rail_direction == DO_NOTHING)
+  {
+    speedControl(0, "NONE");
+  }
+}
 void readRPM()
 {
   static uint32_t last_time = 0;
