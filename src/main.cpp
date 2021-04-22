@@ -49,7 +49,7 @@ void setup()
   pinMode(LED1_PIN, OUTPUT);
   pinMode(LED2_PIN, OUTPUT);
 
-  Serial.begin(9600);
+  // Serial.begin(9600);
   // analogWriteFrequency(1000);
 
   attachInterrupt(digitalPinToInterrupt(ENC_PIN), readRPM, RISING);
@@ -107,14 +107,14 @@ void debugLoop()
     }
 
     last_time_interval = millis();
-    String text = String(pid_value);
-    text += " ";
-    text += String(motor_rpm_no_filter);
-    text += " ";
-    text += String(motor_rpm);
-    text += " ";
-    text += String(digitalRead(ENC_PIN));
-    Serial.println(text);
+    // String text = String(pid_value);
+    // text += " ";
+    // text += String(motor_rpm_no_filter);
+    // text += " ";
+    // text += String(motor_rpm);
+    // text += " ";
+    // text += String(digitalRead(ENC_PIN));
+    // Serial.println(text);
     // motorDrive(0, 1, spd);
   }
 }
@@ -227,13 +227,13 @@ void task1()
     rail_direction = DO_NOTHING;
   }
 
-  Serial.print(analogRead(LDR_PIN));
-  Serial.print(" ");
-  Serial.print(analogRead(RAIN_PIN));
-  Serial.print(" ");
-  Serial.print(clothes_rack);
-  Serial.print(" ");
-  Serial.println(rail_direction);
+  // Serial.print(analogRead(LDR_PIN));
+  // Serial.print(" ");
+  // Serial.print(analogRead(RAIN_PIN));
+  // Serial.print(" ");
+  // Serial.print(clothes_rack);
+  // Serial.print(" ");
+  // Serial.println(rail_direction);
 
   if (rail_direction == TO_OUTSIDE)
   {
